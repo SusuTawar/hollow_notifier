@@ -4,7 +4,10 @@
   "main": "index.js",
   "author": "SusuTawar",
   "license": "MIT",
-  "private": null,
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
     "adm-zip": "^0.4.16",
     "axios": "^0.19.2",
