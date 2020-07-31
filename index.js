@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const rawBody = require("rawBody");
+const morgan = require("morgan");
 const querystring = require("querystring");
 const FeedParser = require("feedparser");
 const AdmZip = require("adm-zip");
@@ -10,8 +11,9 @@ const { createHmac } = require("crypto");
 const { Readable } = require("stream");
 
 const app = express();
+app.use(morgan("common"));
 
-app.get("psh/sub/yt/:name/:chid", async (req, res) => {
+app.get("/psh/sub/yt/:name/:chid", async (req, res) => {
   const { name, chid } = req.params;
   await axios.post({
     method: "POST",
