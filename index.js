@@ -1,6 +1,6 @@
 const express = require("express");
 const axios = require("axios");
-const rawBody = require("rawBody");
+const rawBody = require("raw-body");
 const morgan = require("morgan");
 const querystring = require("querystring");
 const FeedParser = require("feedparser");
@@ -23,7 +23,7 @@ app.get("/psh/sub/yt/:name/:chid", async (req, res) => {
       "hub.verify": "sync",
       "hub.callback": `https://hollow-notifier.glitch.me/psh/yt/${name}`,
       "hub.topic": `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${chid}`,
-      "hub.lease_seconds": 24 * 60 * 60,
+      "hub.lease_seconds": `${24 * 60 * 60}`,
       "hub.secret": process.env.wesub_secret,
     }),
     url: "http://pubsubhubbub.appspot.com/",
