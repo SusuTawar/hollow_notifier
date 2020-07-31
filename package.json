@@ -1,0 +1,13 @@
+{
+  "name": "hollow_live_notifier",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "SusuTawar",
+  "license": "MIT",
+  "private": null,
+  "dependencies": {
+    "adm-zip": "^0.4.16",
+    "express": "^4.17.1",
+    "feedparser": "^2.2.10"
+  }
+}
