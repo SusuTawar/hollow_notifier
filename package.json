@@ -7,7 +7,9 @@
   "private": null,
   "dependencies": {
     "adm-zip": "^0.4.16",
+    "axios": "^0.19.2",
     "express": "^4.17.1",
-    "feedparser": "^2.2.10"
+    "feedparser": "^2.2.10",
+    "raw-body": "^2.4.1"
   }
 }
