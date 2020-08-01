@@ -3,12 +3,11 @@ const axios = require("axios");
 const rawBody = require("raw-body");
 const morgan = require("morgan");
 const querystring = require("querystring");
-const FeedParser = require("feedparser");
+const { parseStringPromise } = require("xml2js");
 const AdmZip = require("adm-zip");
 const { writeFileSync, appendFileSync, readdir, unlinkSync } = require("fs");
 const { resolve } = require("path");
 const { createHmac } = require("crypto");
-const { Readable } = require("stream");
 
 const app = express();
 app.use(morgan("common"));
@@ -53,10 +52,7 @@ app.get("/psh/yt/:id", async (req, res) => {
 
 app.post("/psh/yt/:id", async (req, res) => {
   const r = await checkSign(req);
-  const bodyStream = new Readable();
-  bodyStream.push(r.body);
-  bodyStream.push(null);
-  const d = await parseXml(bodyStream);
+  const d = await parseStringPromise(r.body);
   writeFileSync(
     `logz/entry/${new Date().toString()}-${req.params.id}.txt`,
     JSON.stringify(d, null, "  ")
@@ -78,22 +74,6 @@ async function checkSign(req) {
     verify: signature == `sha1=${csign.digest("hex")}`,
     body: raw,
   };
-}
-
-function parseXml(req) {
-  return new Promise((resolve, reject) => {
-    let data = [];
-    req
-      .pipe(new FeedParser())
-      .on("error", reject)
-      .on("readable", function () {
-        let item;
-        while ((item = this.read())) {
-          data.push(item);
-        }
-        resolve(data);
-      });
-  });
 }
 
 app.get("/dlog.zip", (req, res) => {
