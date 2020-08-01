@@ -15,18 +15,17 @@ app.use(morgan("common"));
 
 app.get("/psh/sub/yt/:name/:chid", async (req, res) => {
   const { name, chid } = req.params;
-  await axios.post({
+  await axios({
+    url: "http://pubsubhubbub.appspot.com/",
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     data: querystring.stringify({
       "hub.mode": "subscribe",
-      "hub.verify": "sync",
       "hub.callback": `https://hollow-notifier.glitch.me/psh/yt/${name}`,
       "hub.topic": `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${chid}`,
       "hub.lease_seconds": `${24 * 60 * 60}`,
       "hub.secret": process.env.wesub_secret,
     }),
-    url: "http://pubsubhubbub.appspot.com/",
   });
   appendFileSync("logz/all.txt", `${new Date().toString()} adding ${name}\n`);
   res.status(200).json({ name, channel: chid });
@@ -35,7 +34,7 @@ app.get("/psh/sub/yt/:name/:chid", async (req, res) => {
 app.get("/psh/yt/:id", async (req, res) => {
   if (
     req.query["hub.mode"] === "subscribe" &&
-    req.query["hub.verify_token"] === process.env.verify_token &&
+    //req.query["hub.verify_token"] === process.env.verify_token &&
     req.query["hub.challenge"].length > 0
   ) {
     res.status(200).send(req.query["hub.challenge"]);
