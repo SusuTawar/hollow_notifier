@@ -1,19 +1,41 @@
-const express = require("express");
 const axios = require("axios");
-const rawBody = require("raw-body");
+const express = require("express");
 const morgan = require("morgan");
+const rawBody = require("raw-body");
+const socketio = require("socket.io");
 const querystring = require("querystring");
-const { parseStringPromise } = require("xml2js");
-const AdmZip = require("adm-zip");
-const { writeFileSync, appendFileSync, readdir, unlinkSync } = require("fs");
-const { resolve } = require("path");
+
+const { join } = require("path");
+const { readdirSync } = require("fs");
 const { createHmac } = require("crypto");
+const { createServer } = require("http");
+const { scheduleJob } = require("node-schedule");
+const { parseStringPromise } = require("xml2js");
+
+const logger = require("./logger");
 
 const app = express();
-app.use(morgan("common"));
+const server = createServer(app);
+const io = socketio(server);
 
-app.get("/psh/sub/yt/:name/:chid", async (req, res) => {
-  const { name, chid } = req.params;
+app.use(morgan("tiny"));
+
+scheduleJob("0 * * *", () => {
+  readdirSync(join(__dirname, "./channels")).forEach((file) => {
+    const g = require(`./channels/${file}`);
+    const group = g.split(".")[0];
+    g.forEach(async (channel) => {
+      const name =
+        `${group}_` +
+        channel.name.replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, function (match) {
+          return +match === 0 ? "" : match.toUpperCase();
+        });
+      await subscribe(name, channel.id);
+    });
+  });
+});
+
+async function subscribe(name, chid) {
   await axios({
     url: "http://pubsubhubbub.appspot.com/",
     method: "POST",
@@ -26,38 +48,41 @@ app.get("/psh/sub/yt/:name/:chid", async (req, res) => {
       "hub.secret": process.env.wesub_secret,
     }),
   });
-  appendFileSync("logz/all.txt", `${new Date().toString()} adding ${name}\n`);
-  res.status(200).json({ name, channel: chid });
-});
+  logger.info(`Subscribe to [${name}] at [${chid}]`);
+}
 
 app.get("/psh/yt/:id", async (req, res) => {
   if (
     req.query["hub.mode"] === "subscribe" &&
-    //req.query["hub.verify_token"] === process.env.verify_token &&
     req.query["hub.challenge"].length > 0
   ) {
     res.status(200).send(req.query["hub.challenge"]);
-    appendFileSync(
-      "logz/all.txt",
-      `${new Date().toString()} verify (success) ${req.params.id}\n`
-    );
+    logger.info(`[${req.params.id}] verification success`);
   } else {
     res.status(400).send("");
-    appendFileSync(
-      "logz/all.txt",
-      `${new Date().toString()} verify (failed) ${req.params.id}\n`
-    );
+    logger.info(`[${req.params.id}] verification fail`);
   }
 });
 
 app.post("/psh/yt/:id", async (req, res) => {
-  const r = await checkSign(req);
-  const d = await parseStringPromise(r.body);
-  writeFileSync(
-    `logz/entry/${new Date().toString()}-${req.params.id}.txt`,
-    JSON.stringify(d, null, "  ")
-  );
-  appendFileSync("logz/all.txt", `${new Date().toString()} ${req.params.id}\n`);
+  const r = await parseStringPromise(await checkSign(req));
+  const entry =
+    "at:deleted-entry" in r ? r.feed["at:deleted-entry"][0] : r.feed.entry[0];
+  const [action, response] = [
+    "at:deleted-entry" in r ? "vid-remove" : "vid-update",
+    {
+      group: req.params.id.split("_")[0],
+      channel: req.params.id.split("_")[1].replace(/([A-Z])/, " $1"),
+      title: entry.title || "Not Defined",
+      link:
+        "yt:videoid" in entry
+          ? entry["yt:videoid"][0]
+          : entry.link[0].$.href.substr(32),
+    },
+  ];
+  logger.info(`[${action}] [${req.params.id}] [${response.link}]`);
+  io.to("/").emit(action, response);
+  io.to(response.group).emit(action, response);
   res.status(200).send("");
 });
 
@@ -76,20 +101,9 @@ async function checkSign(req) {
   };
 }
 
-app.get("/dlog.zip", (req, res) => {
-  const zip = new AdmZip();
-  zip.addLocalFolder("logs");
-  res.send(zip.toBuffer());
+app.listen(3000, () => {
+  logger.info("Http server running");
+  io.listen(4000);
+  logger.info("Running socket.io");
 });
 
-app.get("/purgelog", (req, res) => {
-  readdir("logz/entry", (err, files) => {
-    if (err) return res.status(500).send(err);
-    unlinkSync(resolve("logz/entry", "all.txt"));
-    for (const file of files)
-      if (file.endsWith(".txt")) unlinkSync(resolve("logz/entry", file));
-    res.status(204).end();
-  });
-});
-
-app.listen(3000);
