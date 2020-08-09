@@ -91,8 +91,8 @@ app.post("/psh/yt/:id", checkSign, (req, res) => {
   ];
 	console.log(response);
   logger.info(`[${action}] [${req.params.id}] [${response.link}]`);
-  io.to("/").emit(action, response);
-  io.to(response.group).emit(action, response);
+  io.of("/").emit(action, response);
+  io.of(response.group).emit(action, response);
   res.status(200).send("");
 });
 
