@@ -8,7 +8,7 @@ const querystring = require("querystring");
 
 const { join } = require("path");
 const { readdirSync } = require("fs");
-const { createHmac } = require("crypto");
+const { createHmac, createHash } = require("crypto");
 const { createServer } = require("http");
 const { scheduleJob } = require("node-schedule");
 const { parseStringPromise } = require("xml2js");
@@ -20,12 +20,13 @@ const server = createServer(app);
 const io = socketio(server);
 
 app.use(morgan("tiny"));
+app.use(express.json());
 app.use(helmet());
 
-scheduleJob("0 * * *", () => {
+scheduleJob("0 0 0 * * *", () => {
   readdirSync(join(__dirname, "./channels")).forEach((file) => {
     const g = require(`./channels/${file}`);
-    const group = g.split(".")[0];
+    const group = file.split(".")[0];
     g.forEach((channel) => {
       const name =
         `${group}_` +
@@ -58,6 +59,23 @@ async function subscribe(name, chid) {
   }
 }
 
+app
+  .route("/list")
+  .get((req, res) => {
+    const lists = getList();
+    const md5sum = createHash("md5");
+    md5sum.update(JSON.stringify(lists));
+    res.header("Digest", `md5=${md5sum.digest("hex")}`);
+    res.json(lists);
+  })
+  .head((req, res) => {
+    const lists = getList();
+    const md5sum = createHash("md5");
+    md5sum.update(JSON.stringify(lists));
+    res.header("Digest", `md5=${md5sum.digest("hex")}`);
+    res.end();
+  });
+
 app.get("/psh/yt/:id", async (req, res) => {
   if (
     req.query["hub.mode"] === "subscribe" &&
@@ -82,14 +100,14 @@ app.post("/psh/yt/:id", checkSign, (req, res) => {
     {
       group: req.params.id.split("_")[0],
       channel: req.params.id.split("_")[1].replace(/([A-Z])/, " $1"),
-			title: entry.title? entry.title[0] : "Not Defined",
+      title: entry.title ? entry.title[0] : "Not Defined",
       link:
         "yt:videoid" in entry
           ? entry["yt:videoid"][0]
           : entry.link[0].$.href.split("watch?v=")[1],
     },
   ];
-	console.log(response);
+  console.log(response);
   logger.info(`[${action}] [${req.params.id}] [${response.link}]`);
   io.of("/").emit(action, response);
   io.of(response.group).emit(action, response);
@@ -98,8 +116,9 @@ app.post("/psh/yt/:id", checkSign, (req, res) => {
 
 async function checkSign(req, res, next) {
   try {
-    const xhs = req.headers["x-hub-signature"] || req.headers["X-Hub-Signature"];
-    if (!xhs) return res.status(403).send('');
+    const xhs =
+      req.headers["x-hub-signature"] || req.headers["X-Hub-Signature"];
+    if (!xhs) return res.status(403).send("");
     const method = xhs.split("=")[0];
     const signature = xhs.split("=")[1];
     const raw = await rawBody(req);
@@ -114,8 +133,24 @@ async function checkSign(req, res, next) {
   }
 }
 
-app.listen(3000, () => {
+function getList() {
+  const result = {};
+  readdirSync(join(__dirname, "./channels")).forEach((file) => {
+    const group = require(`./channels/${file}`);
+    result[file.split(".")[0]] = group.map((v) => v.name);
+  });
+  return result;
+}
+
+server.listen(3000, () => {
   logger.info("Http server running");
-  io.listen(4000);
+  io.listen(server);
   logger.info("Running socket.io");
+  readdirSync(join(__dirname, "./channels")).forEach((file) => {
+    const group = file.split(".")[0];
+    io.of(`/${group}`).use((socket, next) => {
+			logger.info(`opening /${group}`)
+      next();
+    });
+  });
 });
